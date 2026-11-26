@@ -1,0 +1,26 @@
+# jkbuha fork 实验 — 如果重启后黑屏/异常，这样恢复
+
+## 你现在装了什么
+内置 ESP 用 jkbuha fork 的 WhateverXe + AMFIAnchor，试图让显卡加速工作。
+E 盘 1401 是【安全配置】（原 WhateverXe + AMFIPass），一定可正常启动。
+
+## 如果重启后黑屏 / 卡住 / 花屏
+1. 长按电源键 10 秒强制关机
+2. 开机立刻反复按 F12（或 Esc）
+3. 启动菜单选【1401】（U 盘）
+4. 会从 E 盘安全配置进入，屏幕正常
+5. 然后告诉我，我把内置 ESP 恢复成安全配置
+
+## 如果重启后正常但没加速
+那也是预期内的（fork 是 Dell 专用，ASUS 面板可能不匹配）。
+告诉我，我恢复安全配置。
+
+## 如果加速成功
+太好了。告诉我，我把 E 盘也更新成 fork 配置。
+
+## 一键恢复内置 ESP（从 E 盘进系统后执行）
+sudo diskutil mount disk0s1
+sudo cp "/Volumes/1401/DSH修复资料/内置ESP备份-fork前-20261126-105844/config.plist.bak" /Volumes/SYSTEM/EFI/OC/config.plist
+sudo rm -rf /Volumes/SYSTEM/EFI/OC/Kexts/WhateverXe.kext
+sudo cp -R "/Volumes/1401/DSH修复资料/内置ESP备份-fork前-20261126-105844/WhateverXe.kext.orig" /Volumes/SYSTEM/EFI/OC/Kexts/WhateverXe.kext
+sudo rm -rf /Volumes/SYSTEM/EFI/OC/Kexts/AMFIAnchor.kext /Volumes/SYSTEM/EFI/OC/Kexts/AMFIAnchorInjector.kext

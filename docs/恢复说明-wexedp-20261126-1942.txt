@@ -1,0 +1,41 @@
+【显卡内屏加速实验 - 恢复说明】
+本机 internal ESP(disk0s1, 卷标 SYSTEM) 已改 boot-args 追加 -wex-edp-keep，用于尝试让 RPL-H 核显内屏加速。
+原理: 让 WhateverXe 保留固件已训练好的 eDP 链路，不再自己重训(官方 README 对 RPL-H 内屏黑屏的标准做法)。
+
+【成功标志】(重启后看):
+  - 关于本机/系统信息 > 显示器: 显存 VRAM 应为 1536 MB(不再是 15MB)。
+  - "图形卡/芯片组" 应显示 Metal 支持；动画不再纯软件合成，窗口拖动/滚动应顺滑很多。
+
+【如果黑屏/卡住(内屏不亮)】:
+  1. 关机。
+  2. 插上这个 U 盘(1401)，开机按住 Option(或自动进 OpenCore) 选从 U 盘启动。
+     - U 盘的 EFI 已保持"去掉 -wex-edp-keep"的原始配置，可正常进系统(未加速、但能显示)。
+  3. 进系统后运行下面命令，把内置盘改回可启动状态:
+       sudo diskutil mount disk0s1
+       sudo cp "/Volumes/1401/DSH修复资料/EFI-sandbox-wexedp-20261126-194127/config-internal-before.plist" "/Volumes/SYSTEM/EFI/OC/config.plist"
+       sudo diskutil unmount disk0s1
+  4. 重启即恢复原状。
+
+【备份位置】 上面 cp 用的就是改前备份:
+  /Volumes/1401/DSH修复资料/EFI-sandbox-wexedp-20261126-194127/
+     config-internal-before.plist  (内置盘改前)
+     config-usb-before.plist       (U盘改前)
+
+注: 本次同时把"触控板 DSDT 补丁"临时关闭(两边都关)，避免干扰显卡实验；触控板之后单独验证。
+
+【第二轮：已换成同平台验证过的 fork 内核】
+内置 ESP(disk0s1) 的 WhateverXe.kext 已由官方 0.8.5 换成 vikenzo196 的 0.8.3-gb3u.3
+（Raptor Lake-H 内屏 DSC eDP 修复版；发布者测试机 i9-13900H + 0xA7A0 + macOS26.7.3 = 本机同款）。
+SHA256 e5ecb5ad2ea20dc9a812ebd57924d4a4af340b66a0ea52d9ad706351d18a054d（与发布版逐字节一致，未签名，OpenCore 注入无需签名）。
+官方 0.8.5 原 kext 已备份在 EFI-sandbox-wexfork-20261126-195104/WhateverXe-official-0.8.5.kext
+
+如果黑屏/内核panic 无法进系统：用 1401 U 盘启动（U盘仍是官方0.8.5、无 -wex-edp-keep，可正常进）。
+如需把内置盘彻底还原：
+  sudo diskutil mount disk0s1
+  sudo cp "/Volumes/1401/DSH修复资料/EFI-sandbox-wexfork-20261126-195104/WhateverXe-official-0.8.5.kext/Contents/MacOS/WhateverXe" "/Volumes/SYSTEM/EFI/OC/Kexts/WhateverXe.kext/Contents/MacOS/WhateverXe"
+  sudo cp "/Volumes/1401/DSH修复资料/EFI-sandbox-wexedp-20261126-194127/config-internal-before.plist" "/Volumes/SYSTEM/EFI/OC/config.plist"
+  sudo diskutil unmount disk0s1
+
+【第三轮：fork + 打开 DSC 开关】
+内置ESP boot-args 追加了 -wex-edp-dsc -wex-edp-60（针对 WEXEDPDSCAdmitted=No 对症）。
+若黑屏/panic：用 1401 U 盘启动（U盘=官方0.8.5+无这些参数，正常）。彻底还原用前面的 cp 命令。

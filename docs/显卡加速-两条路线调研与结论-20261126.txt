@@ -1,0 +1,127 @@
+﻿# 显卡核显加速 · 两条社区路线调研与结论（2026-11-26）
+
+> 本文件记录对"让本机 Intel 核显在 macOS 下真正硬件加速"的两条社区路线（A / B）的完整调研、编译、定位结果与最终结论，方便在 Windows 下用 1401 优盘查阅、以及日后继续跟进。
+> 机器：ASUS Zenbook UX3402VA，CPU i9-13900H（Raptor Lake-H，14C/20T），核显 Intel Iris Xe **8086:A7A0（rev04，96EU）**，无独立显卡。
+> 系统：macOS **26.7.3（build 25G342）**，Darwin 25.6.0，x86_64，OpenCore 引导。
+> 现状：核显**无驱动**（IONDRVFramebuffer 兜底，VRAM 15MB，IOAccelerator=0），分辨率/刷新率/HiDPI 全部锁死，WindowServer 纯 CPU 软件合成，所以卡。
+
+---
+
+## 0. 一句话结论
+
+- **路线 A（WhateverXe-RaptorLakeP）**：能编译，但它的设备表把本机 `0xA7A0` 标成"未知核显"，只实现了 `A7A8`（64EU）档 → **对本机硬件无效，死路。**
+- **路线 B（NootedGreen / JulioNectar）**：GPU 型号完全对得上（官方就是在 A7A0 96EU 上跑通的），核心 kext 也编出来了；但**整套栈死绑 macOS 26.7.1（25G241）**，本机 26.7.3 缺了它必需的 `libLLVM.dylib`，着色器编译器根本编不出来 → **在本机当前系统上装不起来。**
+- **唯一真正可能跑通的路**：把系统换成 **macOS 26.7.1（25G241）** 后再按路线 B 安装（作者实测版本 + 社区同 GPU 有成功先例）。但需为 Zenbook 改 EFI、并接受实验驱动的偶发崩溃风险。
+
+---
+
+## 1. 为什么"换个系统版本"就能用驱动
+
+卡住路线的两个点，**都是版本问题**，换到 26.7.1 就同时消失：
+
+| 卡点（在 26.7.3 / 25G342 上） | 换到 26.7.1（25G241）后 |
+|---|---|
+| 路线B 的内核字节补丁只在 25G241 上逐字节验证过；26.7.3 上"找不到就安全跳过"→ 打了也不加速 | 26.7.1 就是 25G241，补丁逐字节对得上 |
+| 系统缺 `GPUCompiler.framework/Versions/32023/Libraries/libLLVM.dylib`，Metal 着色器编译器无法构建 | 26.7.1 里**有**这个库，能编 |
+| GPU 型号 | A7A0 96EU 本来就是路线B 支持的目标 |
+
+社区在 26.7.1 上的成功先例（来自项目 docs/STATUS.md）：
+- **Dell Latitude 7430**：i7-1265U，Iris Xe **46A8（96EU）**，1080p 面板，macOS 26.7.1 → 已报告可用。
+- **HP ProBook 450 G9**：i5-1240P，Iris Xe 46A6（80EU），1080p，macOS 26.7.1 → 可用。
+
+> 注意：换系统只是"从装不起来变成能装、有机会跑"，**不等于装上自动好**。还要给 Zenbook 改 EFI（见第 4 节），作者也明确说会偶发 GPU 挂起 / 内核 panic。
+
+---
+
+## 2. 路线 A：samranahmad09 / WhateverXe-RaptorLakeP
+
+- 仓库：`https://github.com/samranahmad09/WhateverXe-RaptorLakeP`（WhateverXe 的一个分支，号称支持 Raptor Lake-H/P/U **笔记本内屏 eDP**）
+- 关键启动参数：`-wex-rplp-gt`（准入）、`-wex-rplp-ecbl`（EC 亮度）、`wex-rplp-urb-banks=5`（OpenGL）
+- 参考机：ASUS TUF F15 FX507VI，i7-13620H，**UHD A7A8 rev04（64EU）**，1920x1080 144Hz eDP；据称已达到"内屏点亮 + Metal/OpenGL 加速 + iGPU 1536MB + 亮度 + 睡眠唤醒"。
+
+**我做了什么**：拉源码 → 补齐 Lilu / MacKernelSDK 依赖 → 命令行工具链真的编译成功。
+- 产物：`WhateverXe.kext`（org.b00t0x.WhateverXe，CFBundleVersion 0.3.0，二进制 1,404,936 字节，x86_64）+ `AppleIntelTGLCompat.kext`。
+
+**为什么对本机无效（死路）**：
+- `WhateverXe/kern_xelp_devices.hpp` 第 47 行：`{0xA7A0, Family::RaptorLakeP, Display::XeLPD, GT::Unknown, "Intel Iris Xe Graphics"}` —— 本机 A7A0 被登记为 **GT::Unknown（未知核显）**。
+- 只有第 49 行 `{0xA7A8, …, GT::RPLPMedium}` 是真正实现了的 **64EU** 档。
+- 其 README 兼容性表明确写：**"Raptor Lake-P（A7A8 revision 4）只在使用 `-wex-rplp-gt` 时准入"**；自检只在 rev4 / 4DSS / 64EU / L3 0x88 上跑过。
+- `kern_raptorlake_p.hpp:235`：`if(identity(reply)!=Physical) return Status::NotA7A8;`（Physical=0xA7A88086）→ 本机 A7A0 直接被拒。
+- 结论：**这条线是照 64EU 的 A7A8 写的，本机 96EU 的 A7A0 没有任何核心参数档位，装了也不会加速。** 要支持本机 = 自己补一套 96EU 的 GT profile = 正是上游 issue #104 / #212 全世界都卡着没解的那部分。
+
+---
+
+## 3. 路线 B：JulioNectar / Hackintosh-XPS13Plus-IrisXe-Tahoe（NootedGreen 栈）
+
+- 仓库：`https://github.com/JulioNectar/Hackintosh-XPS13Plus-IrisXe-Tahoe`（releases 为空，只能源码构建）
+- 官方目标：Dell XPS 13 Plus 9320，**i7-1360P，Iris Xe 8086:A7A0**，**macOS Tahoe 26.7.1（25G241）** → 实现 **Metal / Core Animation / Liquid Glass** 真硬件加速。
+- 原理：EFI 把 GPU 伪装成 Tiger Lake `device-id 9A49`；NootedGreen 在内核内存里 patch Apple 的 TGL 驱动（GPUDriversIntel 16.0.32）；用户态再 patch Metal 驱动（MTL17）+ libxedrv + 着色器编译器（xe.bundle 放 `/System/Library/Caches`）。
+- **对本机有利的一点**：NootedGreen 把"非真 Tiger Lake"的核显**默认按 96EU / 8 个 L3 bank 描述**——正好是本机规格（只有 80EU 机器才需要 `ngreen-eu=80 ngreen-l3=6`）。
+- 附带的 **`-ngreenpm` CPU 睿频修复**：单核 +33%、多核 +16%。（但本机实测 93% 空闲、非 CPU 瓶颈，这一项对"卡顿"帮助有限。）
+
+**我做了什么**：拉源码 → 预置 `build/deps/{MacKernelSDK, Lilu.kext}` → 编译成功：
+- `build/NootedGreen.kext`（com.StezzaPilot.NootedGreen 1.0.0，Mach-O x86_64）
+- `build/HookCase.kext`（org.smichaud.HookCase，TGL 驱动依赖它）
+
+**为什么在本机 26.7.3 上装不起来（版本硬阻塞）**：
+1. **内核字节补丁**：项目 `docs/KERNEL-PATCHES.md` 说明补丁只在 **25G241** 上验证，"找不到就安全跳过（fail-safe）"→ 在 26.7.3 上大概率不生效（不加速）。
+2. **着色器编译器缺库（致命）**：`macos/build-shader-compiler.sh` 第 26 行硬编码
+   `LLVM=/System/Library/PrivateFrameworks/GPUCompiler.framework/Versions/32023/Libraries/libLLVM.dylib`
+   用它的导出符号生成 tbd 给 `libLLVMbridge.dylib` 重导出。**本机 26.7.3 里这个文件根本不存在**：
+   - `.../Versions/32023/Libraries/` 只有 `libGPUCompilerImplLazy.dylib`（51MB）+ `lib/clang/32023.886`；
+   - `find /System/Library -name 'libLLVM*.dylib'` = 空；
+   - `libGPUCompilerImplLazy.dylib` 也不导出任何 LLVM 符号（`dyld_info -exports | grep -i llvm` = 0）。
+   → 苹果在 26.7.1 之后把 LLVM 从 GPUCompiler 里挪走/合并了，所以**着色器编译器栈（Metal 必需）在 26.7.3 上连编都编不出来**。
+3. 项目 README 原文：补丁"只在 macOS 26.7.1 25G241 上逐字节验证过"；`docs/STATUS.md` 标题即"(October 2026, macOS Tahoe 26.7.1 25G241)"。
+
+> 可行性判定：路线B 是**目前唯一 GPU 型号匹配本机（A7A0 96EU）**的方案，但它被绑定在 26.7.1。要在 26.7.3 上强行跑，得重写它的着色器桥接（高风险、低成功率、可能 panic），不建议拿日用机硬赌。
+
+---
+
+## 4. 唯一可行路径：换到 macOS 26.7.1（25G241）再装路线B
+
+三个现实做法（风险从低到高）：
+
+1. **【最稳·推荐】外置 SSD / 移动硬盘上装 26.7.1**，再装路线B 测试。
+   成了就在外置盘上用加速系统；不成，本机现有系统一点没动。作者当初就是这么做的。
+2. **整机重装 26.7.1**：需先备份、准备 26.7.1 完整安装镜像，现有的声卡（AppleALC+SimpleHDA）、MHelper、控制台 App 都要重做一遍。
+3. **保守**：留在 26.7.3，接受"无 GPU 加速"，把本机这组**全世界没人报过的参数（Zenbook UX3402VA / i9-13900H 96EU / 25G342）**提交到上游 issue，推动以后支持。
+
+**即便装到 26.7.1，仍需为 Zenbook 做的 EFI 适配**（GPU 驱动通用，EFI 每台不同）：
+- 把核显伪装成 Tiger Lake `device-id 9A49`；
+- NootedGreen / HookCase / AMFIPass 的加载顺序；
+- 面板 **2560×1600**（项目原配 3840×2400）用 `xe-res` 设；
+- ACPI（SSDT-PLUG-ALT、SSDT-AWAC；VMD 关闭）等；
+- 先卸载现有 WhateverXe Graphics 0.4.5（与路线B 装到 `/Library/Extensions` 会冲突），路线B 自带 `--uninstall`。
+
+---
+
+## 5. 本轮已产出 / 已编译的文件（保留备用）
+
+- 路线A 编译产物：`/tmp/rplp/WhateverXe-RaptorLakeP-rplp-accel/build/WhateverXe.kext`、`AppleIntelTGLCompat.kext`
+- 路线B 编译产物：`/tmp/rplp/Hackintosh-XPS13Plus-IrisXe-Tahoe-main/build/NootedGreen.kext`、`HookCase.kext`
+- 这些已另行打包到本目录 `显卡驱动构建产物/`（zip），方便在 Windows 侧留档（`/tmp` 重启后会清空）。
+- 相关工具/镜像经验：`ghfast.top` 对 codeload 返回 403，改用 `https://gh-proxy.com/https://<原地址>` 可取；Lilu 的 Headers 里有符号链接，复制需 `cp -RL` 解引用，否则 clang 报 `'Headers/hde64.h' file not found`。
+
+---
+
+## 6. 相关上游 issue（供跟进 / 反馈本机参数）
+
+WhateverXe（b00t0x）：
+- #212 RPL-H 0xA7A0 rev04 N97GTStep=unknown 阻塞原生启动（本机同款，open）
+- #104 0xA7A0 内屏 首开黑再开亮（clock-gate retry / panel admission veto，open）
+- #100 0xA7A0 内屏 0.8.0 停 InvalidDPSource（open）
+- #183 i5-13500H 0xA7A0 2560x1600 eDP 链路训练必失败（open）
+- #149 RPL-H i7-13705H A7A0 Sequoia 未加速
+- #53 CLOSED：vikenzo196 用 DSC-eDP 方案在同款 A7A0 把内屏 2880x1800@120 点亮（但需配套分支，且仍是 A7A8/DSC 路线）
+
+JulioNectar（NootedGreen 栈）：
+- 仓库 issues #2 等已有其它 96EU / 80EU 机器（Dell 7430、HP ProBook 450 G9）在 26.7.1 成功的报告。
+
+---
+
+## 7. 免责 / 现状
+
+- 以上路线均为社区**实验性驱动**，非官方支持；换系统/装驱动属高风险操作，务必先完整备份 EFI、保留可启动的 U 盘恢复盘。
+- 本机当前保持 **26.7.3 + 官方 WhateverXe 0.8.5（不加速，但稳定）**，未做任何破坏性改动。
+- 亮度调节用"覆盖层调光"（控制台 App 滑条 + ⌃⌥ 快捷键）已可用；触控板 DSDT 补丁仍在配置里（待单独验证）。

@@ -1,0 +1,26 @@
+E:\EFI\OC\Kexts 当前目录清单
+AMFIPass.kext
+AirportItlwm.kext
+BlueToolFixup.kext
+BrightnessKeys.kext
+CpuTopologyRebuild.kext
+CpuTscSync.kext
+IntelBTPatcher.kext
+IntelBluetoothFirmware.kext
+Lilu.kext
+NVMeFix.kext
+RestrictEvents.kext
+SMCBatteryManager.kext
+SMCLightSensor.kext
+SMCProcessor.kext
+SMCSuperIO.kext
+Sinetek-rtsx.kext
+USBToolBox.kext
+UTBDefault.kext
+VirtualSMC.kext
+VoodooI2C.kext
+VoodooI2CHID.kext
+VoodooPS2Controller.kext
+WhateverXe.kext
+XHCI-unsupported.kext
+itlwm.kext

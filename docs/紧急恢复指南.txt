@@ -1,0 +1,54 @@
+# 紧急恢复指南（重启后若无法进入系统时看这个）
+
+> 生成：2026-11-26 10:30，重启验证显卡修复前
+
+## 如果你看到黑屏/卡住/自动重启
+
+**不要慌，EFI 可完整回滚。**
+
+## 方法 1：从 E 盘启动（最快）
+
+1. 长按电源键强制关机
+2. 开机连续按 **F12**（或 Esc）
+3. 启动菜单选 **1401**（U 盘）
+4. 从 E 盘的 OpenCore 进 macOS（E 盘 config 与内置 ESP 一致，都是修复后的）
+
+## 方法 2：回滚内置 ESP 到显卡修复前
+
+如果能进系统（比如从 E 盘进），执行：
+
+```bash
+sudo diskutil mount disk0s1
+# 找到挂载点（/Volumes/SYSTEM 或 /Volumes/EFI）
+sudo cp "/Volumes/1401/DSH修复资料/内置ESP备份-20261126-090607/config.plist.bak" /Volumes/SYSTEM/EFI/OC/config.plist
+```
+
+## 方法 3：完全移除显卡驱动
+
+如果能进系统：
+
+```bash
+sudo rm -rf /Library/Extensions/AppleIntelTGLGraphics.kext
+sudo rm -rf /Library/Extensions/AppleIntelTGLGraphicsFramebuffer.kext
+sudo rm -rf /Library/Extensions/AppleIntelTGLCompat.kext
+sudo rm -rf /Library/GPUBundles/AppleIntelTGL*.bundle
+sudo rm -rf /Library/GPUBundles/XeCompilerAdapter.bundle
+sudo kmutil create -n aux -x -z -V release -r /Library/Extensions --allow-missing-kdk \
+  -B /System/Library/KernelCollections/BootKernelExtensions.kc \
+  -S /System/Library/KernelCollections/SystemKernelExtensions.kc \
+  -A /Library/KernelCollections/AuxiliaryKernelExtensions.kc --no-authentication
+```
+然后重启。声卡/网卡/MHelper 不受影响，仍在 EFI 里。
+
+## 方法 4：如果怀疑是 -disablegfxfirmware 导致
+
+boot-args 里的 `-disablegfxfirmware` 是 WhateverXe 官方要求，一般不会导致问题。但如果确实需要临时去掉，用 **方法 2** 回滚 config 即可。
+
+## 关键备份位置
+
+| 备份 | 路径 |
+|---|---|
+| 内置 ESP 显卡修复前 config | `E:\DSH修复资料\内置ESP备份-20261126-090607\config.plist.bak` |
+| E 盘当前 EFI（修复后，可启动） | `E:\EFI\` |
+| 最初完整 EFI 沙盒 | `E:\DSH修复资料\EFI-sandbox-20261125-231701\` |
+| 一键还原脚本 | `E:\DSH修复资料\RESTORE-EFI.sh` |

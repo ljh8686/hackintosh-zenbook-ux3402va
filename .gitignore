@@ -1,0 +1,6 @@
+.DS_Store
+*.zip
+EFI-sandbox*/
+*.app/
+build/
+__pycache__/
