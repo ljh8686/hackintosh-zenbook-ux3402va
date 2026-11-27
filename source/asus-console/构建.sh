@@ -12,11 +12,16 @@ cat > "$APP/Contents/Info.plist" <<'PL'
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
 <key>CFBundleName</key><string>ASUS控制台</string>
+<key>CFBundleDisplayName</key><string>ASUS控制台</string>
 <key>CFBundleIdentifier</key><string>com.local.asusconsole</string>
 <key>CFBundleExecutable</key><string>ASUSConsole</string>
 <key>CFBundleIconFile</key><string>AppIcon</string>
 <key>CFBundlePackageType</key><string>APPL</string>
-<key>CFBundleShortVersionString</key><string>1.0</string>
+<key>CFBundleShortVersionString</key><string>1.1</string>
+<key>CFBundleVersion</key><string>2</string>
+<key>CFBundleDevelopmentRegion</key><string>zh_CN</string>
+<key>CFBundleLocalizations</key><array><string>zh-Hans</string><string>en</string></array>
+<key>CFBundleAllowMixedLocalizations</key><true/>
 <key>LSMinimumSystemVersion</key><string>13.0</string>
 <key>NSHighResolutionCapable</key><true/>
 </dict></plist>

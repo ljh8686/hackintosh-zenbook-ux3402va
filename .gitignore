@@ -4,3 +4,6 @@ EFI-sandbox*/
 *.app/
 build/
 __pycache__/
+
+# ASUS 控制台构建产物
+source/asus-console/ASUSConsole
