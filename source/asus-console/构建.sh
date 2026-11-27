@@ -23,6 +23,7 @@ cat > "$APP/Contents/Info.plist" <<'PL'
 <key>CFBundleLocalizations</key><array><string>zh-Hans</string><string>en</string></array>
 <key>CFBundleAllowMixedLocalizations</key><true/>
 <key>LSMinimumSystemVersion</key><string>13.0</string>
+<key>LSUIElement</key><true/>
 <key>NSHighResolutionCapable</key><true/>
 </dict></plist>
 PL

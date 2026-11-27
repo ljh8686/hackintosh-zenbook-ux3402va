@@ -14,7 +14,7 @@
 | 充电上限 | 100% / 80% / 60% → `sSetCharge` |
 | Fn Lock | 功能键锁定开关 → `sSetFnLock`(sel 10)，读 off68 回显 |
 | 系统状态 | CPU / 内存 / 电池 / 当前模式，2 秒刷新 |
-| 菜单栏常驻 | 菜单栏图标点开即调性能 / 背光 / 充电 / 亮度预设，不开主窗口 |
+| 菜单栏常驻 | 菜单栏图标点开即调性能 / 背光 / 充电 / 亮度预设；纯状态栏代理，**不占 Dock**、关窗不退出 |
 | 界面 | 全中文、Liquid Glass（`.glassEffect`）卡片、可选玻璃粒子动效（默认关闭，省电） |
 
 ![状态栏面板](screenshots/状态栏面板.png)
@@ -62,5 +62,6 @@ osascript -e 'tell application "System Events" to make login item at end with pr
 
 ## 版本
 
+- **v1.1.1（2026-11-27）**：改为纯菜单栏代理（`LSUIElement` + `.accessory`），不占 Dock、关窗不退出；修复主窗口被设成浮动级（level 302）导致一直置顶的问题；启动默认不弹窗。
 - **v1.1（2026-11-27）**：合并 MHelper（单一控制源）、菜单栏常驻面板、关窗不退出、Liquid Glass 界面、全中文、Fn Lock、背景动画按反馈改为静态。
 - v1.0：初版（亮度覆盖层、性能模式、键盘背光、充电上限、系统状态）。

@@ -915,6 +915,7 @@ struct StatusBarPanel: View {
                 Button {
                     NSApp.activate(ignoringOtherApps: true)
                     if let w = NSApp.windows.first(where: { !($0 is OverlayWindow) && $0.isVisible }) {
+                        w.level = .normal
                         w.makeKeyAndOrderFront(nil)
                     } else {
                         openWindow(id: "main")
@@ -963,34 +964,31 @@ struct MenuBarLabel: View {
 
 // MARK: - App
 class AppDelegate: NSObject, NSApplicationDelegate {
-    private func setPanelLevel(_ lv: Int) {
-        for w in NSApp.windows where !(w is OverlayWindow) { w.level = NSWindow.Level(rawValue: lv) }
-    }
+    private var fittedOnce = false
     func applicationDidFinishLaunching(_ n: Notification) {
         NSApp.appearance = NSAppearance(named: .darkAqua)
-        NSApp.setActivationPolicy(.regular); NSApp.activate(ignoringOtherApps: true)
+        // 菜单栏常驻：accessory 策略不占 Dock、不显示 App 菜单栏，只留状态栏图标
+        NSApp.setActivationPolicy(.accessory)
         Monitor.shared.applySavedOnLaunch()
         Monitor.shared.enforceTakeover()
         HotkeyTap.shared.start()
         HIDConsumerTap.shared.start()
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-            self.setPanelLevel(302)
-            self.fitWindow()
-        }
+        NotificationCenter.default.addObserver(self, selector: #selector(windowDidBecomeMain(_:)),
+                                               name: NSWindow.didBecomeMainNotification, object: nil)
+    }
+    @objc private func windowDidBecomeMain(_ n: Notification) {
+        guard !fittedOnce, let w = n.object as? NSWindow, !(w is OverlayWindow) else { return }
+        fittedOnce = true
+        fit(w)
     }
     // 统一初始窗口尺寸，避免旧版保存的过大窗口超出屏幕；之后仍可自由缩放
-    private func fitWindow() {
+    private func fit(_ win: NSWindow) {
         guard let scr = NSScreen.main else { return }
         let vis = scr.visibleFrame
         let h = min(760, vis.height - 40)
         let w: CGFloat = 520
-        let rect = NSRect(x: vis.midX - w / 2, y: vis.midY - h / 2, width: w, height: h)
-        for win in NSApp.windows where !(win is OverlayWindow) {
-            win.setFrame(rect, display: true)
-        }
+        win.setFrame(NSRect(x: vis.midX - w / 2, y: vis.midY - h / 2, width: w, height: h), display: true)
     }
-    func applicationDidBecomeActive(_ n: Notification) { setPanelLevel(302) }
-    func applicationDidResignActive(_ n: Notification) { setPanelLevel(0) }
     func applicationShouldTerminateAfterLastWindowClosed(_ s: NSApplication) -> Bool { false }
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         NotificationCenter.default.post(name: .asusShowMain, object: nil)
@@ -1007,6 +1005,7 @@ struct AsusConsoleApp: App {
             .windowStyle(.hiddenTitleBar)
             .windowResizability(.contentMinSize)
             .defaultSize(width: 520, height: 800)
+            .defaultLaunchBehavior(.suppressed)
             .commands { CommandGroup(replacing: .newItem) {} }
         MenuBarExtra {
             StatusBarPanel(mon: Monitor.shared)
